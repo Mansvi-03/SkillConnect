@@ -62,6 +62,8 @@ import ManageServices from "./pages/admin/ManageServices";
 
 import Profile from "./pages/Profile";
 
+import Loading from "./components/Loading";
+
 /* =====================================================
    PROTECTED ROUTE
 ===================================================== */
@@ -70,12 +72,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="page-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <Loading message="Checking authorization..." />;
   }
 
   if (!user) {
@@ -107,10 +104,11 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
 const App = () => {
   return (
-    <>
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
       <Navbar />
 
-      <Routes>
+      <main className="flex-grow">
+        <Routes>
         {/* =================================================
             PUBLIC ROUTES
         ================================================= */}
@@ -222,9 +220,10 @@ const App = () => {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </main>
 
       <Footer />
-    </>
+    </div>
   );
 };
 

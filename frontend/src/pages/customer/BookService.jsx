@@ -2,9 +2,22 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import api from "../../services/api";
 import Loading from "../../components/Loading";
+import {
+  Calendar,
+  Clock,
+  ArrowLeft,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  MapPin,
+  CalendarCheck,
+} from "lucide-react";
 
 const BookService = () => {
-  const { id } = useParams();
+  const params = useParams();
+  const targetId = params.serviceId || params.id;
   const navigate = useNavigate();
 
   const [service, setService] = useState(null);
@@ -19,33 +32,28 @@ const BookService = () => {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // =====================================================
-  // FETCH SERVICE
-  // =====================================================
-
   useEffect(() => {
     const fetchService = async () => {
       try {
-        const response = await api.get(`/services/${id}`);
-
+        setLoading(true);
+        setError("");
+        const response = await api.get(`/services/${targetId}`);
         setService(response.data.service);
-      } catch (error) {
-        setError(error.response?.data?.message || "Unable to load service.");
+      } catch (err) {
+        setError(err.response?.data?.message || "Unable to load service.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchService();
-  }, [id]);
+    if (targetId) {
+      fetchService();
+    }
+  }, [targetId]);
 
-  // =====================================================
-  // CHECK AVAILABILITY
-  // =====================================================
-
-  const handleCheckAvailability = async () => {
-    if (!date) {
-      setError("Please select a booking date.");
+  const handleCheckAvailability = async (selectedDate = date) => {
+    if (!selectedDate) {
+      setError("Please select a booking date first.");
       return;
     }
 
@@ -57,41 +65,41 @@ const BookService = () => {
 
     try {
       const response = await api.get(
-        `/availability/check?serviceId=${id}&date=${date}`,
+        `/availability/check?serviceId=${targetId}&date=${selectedDate}`,
       );
-
       const slots = response.data.availableSlots || [];
-
       setAvailableSlots(slots);
 
       if (slots.length === 0) {
-        setMessage("No available slots found for this date.");
+        setMessage("No available slots found for this date. Please try another day.");
       } else {
-        setMessage(
-          `${slots.length} slot${slots.length > 1 ? "s" : ""} available.`,
-        );
+        setMessage(`${slots.length} available time slot${slots.length > 1 ? "s" : ""} found!`);
       }
-    } catch (error) {
+    } catch (err) {
       setError(
-        error.response?.data?.message || "Unable to check availability.",
+        err.response?.data?.message || "Unable to check availability.",
       );
     } finally {
       setChecking(false);
     }
   };
 
-  // =====================================================
-  // CONFIRM BOOKING
-  // =====================================================
+  const handleDateChange = (e) => {
+    const newDate = e.target.value;
+    setDate(newDate);
+    if (newDate) {
+      handleCheckAvailability(newDate);
+    }
+  };
 
   const handleConfirmBooking = async () => {
     if (!date) {
-      setError("Please select a booking date.");
+      setError("Please select a date for your service.");
       return;
     }
 
     if (!selectedSlot) {
-      setError("Please select an available time slot.");
+      setError("Please pick an available time slot.");
       return;
     }
 
@@ -107,415 +115,241 @@ const BookService = () => {
         endTime: selectedSlot.endTime,
       });
 
-      setMessage("Booking created successfully.");
-
+      setMessage("Booking submitted successfully! Directing to your bookings...");
       setTimeout(() => {
         navigate("/customer/bookings");
-      }, 1000);
-    } catch (error) {
-      setError(error.response?.data?.message || "Unable to create booking.");
-    } finally {
+      }, 1200);
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to complete booking.");
       setBooking(false);
     }
   };
 
-  // =====================================================
-  // LOADING
-  // =====================================================
-
   if (loading) {
-    return <Loading />;
+    return <Loading message="Loading booking options..." />;
   }
-
-  // =====================================================
-  // SERVICE LOAD ERROR
-  // =====================================================
-
-  if (error && !service) {
-    return (
-      <div className="book-service-page">
-        <div className="sc-container">
-          <div className="book-service-error-page">
-            <div className="book-service-error-icon">!</div>
-
-            <h2>Unable to load service</h2>
-
-            <p>{error}</p>
-
-            <Link to="/services" className="book-service-back-button">
-              Back to Services
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // =====================================================
-  // SERVICE NOT FOUND
-  // =====================================================
 
   if (!service) {
     return (
-      <div className="book-service-page">
-        <div className="sc-container">
-          <div className="book-service-error-page">
-            <div className="book-service-error-icon">?</div>
-
-            <h2>Service not found</h2>
-
-            <p>The service you're looking for does not exist.</p>
-
-            <Link to="/services" className="book-service-back-button">
-              Back to Services
-            </Link>
-          </div>
+      <div className="min-h-[60vh] flex items-center justify-center p-6 bg-slate-50">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center border border-slate-200/80 shadow-lg">
+          <h2 className="text-xl font-bold text-slate-900">Service Not Found</h2>
+          <p className="text-sm text-slate-500 mt-2 mb-6">
+            The service you're trying to book is no longer available.
+          </p>
+          <Link
+            to="/services"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Services</span>
+          </Link>
         </div>
       </div>
     );
   }
 
-  // =====================================================
-  // PAGE
-  // =====================================================
+  // Today's date in YYYY-MM-DD for min date
+  const todayStr = new Date().toISOString().split("T")[0];
 
   return (
-    <div className="book-service-page">
-      {/* =================================================
-          HEADER
-      ================================================== */}
-
-      <section className="book-service-header">
-        <div className="sc-container">
-          <Link to={`/services/${service._id}`} className="book-service-back">
-            ← Back to Service
+    <div className="min-h-screen bg-slate-50 pb-16">
+      {/* Breadcrumb Header */}
+      <div className="bg-white border-b border-slate-200/80 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Link
+            to={`/services/${service._id}`}
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Service Details</span>
           </Link>
-
-          <div className="book-service-header-content">
-            <span className="book-service-eyebrow">Booking</span>
-
-            <h1 className="book-service-title">Book a Service</h1>
-
-            <p className="book-service-subtitle">
-              Select your preferred date and available time slot.
-            </p>
-          </div>
         </div>
-      </section>
+      </div>
 
-      {/* =================================================
-          MAIN CONTENT
-      ================================================== */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        <div className="mb-8">
+          <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+            Step-by-Step Scheduling
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">
+            Book Appointment
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Select a convenient date and time to schedule your appointment with {service.provider?.user?.name || "the provider"}.
+          </p>
+        </div>
 
-      <section className="book-service-content">
-        <div className="sc-container">
-          <div className="book-service-layout">
-            {/* =================================================
-                LEFT SIDE
-            ================================================== */}
-
-            <div className="book-service-left">
-              {/* SERVICE CARD */}
-
-              <div className="booking-service-card">
-                <div className="booking-service-card-header">
-                  <span className="booking-service-icon">🛠️</span>
-
-                  <div>
-                    <span className="booking-service-label">
-                      Selected Service
-                    </span>
-
-                    <h2>{service.name}</h2>
-                  </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Date & Slot Selection */}
+          <div className="lg:col-span-7 space-y-6">
+            {/* Step 1: Select Date */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-bold text-xs flex items-center justify-center">
+                  1
                 </div>
-
-                <div className="booking-service-divider" />
-
-                <p className="booking-service-description">
-                  {service.description ||
-                    "No description available for this service."}
-                </p>
-
-                <div className="booking-service-info">
-                  {/* PRICE */}
-
-                  <div className="booking-service-info-item">
-                    <span>💰</span>
-
-                    <div>
-                      <small>Price</small>
-
-                      <strong>₹{service.price}</strong>
-                    </div>
-                  </div>
-
-                  {/* LOCATION */}
-
-                  <div className="booking-service-info-item">
-                    <span>📍</span>
-
-                    <div>
-                      <small>Location</small>
-
-                      <strong>{service.location || "N/A"}</strong>
-                    </div>
-                  </div>
-
-                  {/* RATING */}
-
-                  <div className="booking-service-info-item">
-                    <span>⭐</span>
-
-                    <div>
-                      <small>Rating</small>
-
-                      <strong>{service.averageRating || 0}</strong>
-                    </div>
-                  </div>
-
-                  {/* CATEGORY */}
-
-                  <div className="booking-service-info-item">
-                    <span>📂</span>
-
-                    <div>
-                      <small>Category</small>
-
-                      <strong>{service.category?.name || "N/A"}</strong>
-                    </div>
-                  </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Choose a Date</h2>
+                  <p className="text-xs text-slate-500">Pick any available upcoming day</p>
                 </div>
               </div>
 
-              {/* =================================================
-                  PROVIDER CARD
-              ================================================== */}
-
-              <div className="booking-provider-card">
-                <div className="booking-provider-avatar">
-                  {service.provider?.user?.name
-                    ? service.provider.user.name.charAt(0).toUpperCase()
-                    : "P"}
-                </div>
-
-                <div className="booking-provider-info">
-                  <span>Service Provider</span>
-
-                  <h3>{service.provider?.user?.name || "Provider"}</h3>
-
-                  <p>
-                    {service.provider?.user?.email || "Provider information"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* =================================================
-                RIGHT SIDE
-            ================================================== */}
-
-            <div className="book-service-right">
-              <div className="booking-form-card">
-                {/* =================================================
-                    STEP 1
-                ================================================== */}
-
-                <div className="booking-form-header">
-                  <span className="booking-form-number">01</span>
-
-                  <div>
-                    <span>STEP 1</span>
-
-                    <h2>Select Date</h2>
-                  </div>
-                </div>
-
-                {/* DATE */}
-
-                <div className="booking-date-section">
-                  <label htmlFor="booking-date">Booking Date</label>
-
+              <div className="space-y-4">
+                <div className="relative">
+                  <Calendar className="w-5 h-5 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
                   <input
-                    id="booking-date"
                     type="date"
+                    min={todayStr}
                     value={date}
-                    min={new Date().toISOString().split("T")[0]}
-                    onChange={(event) => {
-                      setDate(event.target.value);
-                      setAvailableSlots([]);
-                      setSelectedSlot(null);
-                      setMessage("");
-                      setError("");
-                    }}
+                    onChange={handleDateChange}
+                    className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
                   />
+                </div>
+              </div>
+            </div>
 
-                  <p className="booking-field-help">
-                    Choose a date to see available time slots.
-                  </p>
+            {/* Step 2: Available Slots */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                  2
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Select Time Slot</h2>
+                  <p className="text-xs text-slate-500">Choose an open slot from provider's schedule</p>
+                </div>
+              </div>
+
+              {/* Status / Feedback message */}
+              {checking && (
+                <div className="py-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin" />
+                  <span>Checking open time slots...</span>
+                </div>
+              )}
+
+              {!checking && message && (
+                <div className="p-3 mb-4 rounded-xl bg-blue-50 border border-blue-100 text-blue-800 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>{message}</span>
+                </div>
+              )}
+
+              {!checking && error && (
+                <div className="p-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {!checking && !date && (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
+                  Please choose a date above to display available appointment slots.
+                </div>
+              )}
+
+              {!checking && date && availableSlots.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {availableSlots.map((slot, index) => {
+                    const isSelected =
+                      selectedSlot?.startTime === slot.startTime &&
+                      selectedSlot?.endTime === slot.endTime;
+
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setSelectedSlot(slot)}
+                        className={`p-3.5 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                          isSelected
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                            : "bg-slate-50 hover:bg-white text-slate-700 border-slate-200/80 hover:border-blue-400"
+                        }`}
+                      >
+                        <Clock className={`w-4 h-4 ${isSelected ? "text-white" : "text-slate-400"}`} />
+                        <span className="text-xs font-bold">
+                          {slot.startTime} - {slot.endTime}
+                        </span>
+                        <span className={`text-[10px] ${isSelected ? "text-blue-100" : "text-emerald-600 font-semibold"}`}>
+                          Available
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Order Summary & Confirmation */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-lg space-y-5">
+              <h3 className="text-base font-bold text-slate-900 pb-3 border-b border-slate-100">
+                Booking Summary
+              </h3>
+
+              <div className="space-y-3 text-xs sm:text-sm">
+                <div className="flex justify-between items-start">
+                  <span className="text-slate-500">Service:</span>
+                  <span className="font-bold text-slate-900 text-right max-w-[180px]">
+                    {service.name}
+                  </span>
                 </div>
 
-                {/* CHECK AVAILABILITY */}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Provider:</span>
+                  <span className="font-semibold text-slate-800">
+                    {service.provider?.user?.name || "Local Pro"}
+                  </span>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={handleCheckAvailability}
-                  disabled={checking || !date}
-                  className="booking-check-button"
-                >
-                  {checking ? "Checking..." : "Check Available Slots"}
-                </button>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Date:</span>
+                  <span className="font-semibold text-slate-800">
+                    {date ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Not selected"}
+                  </span>
+                </div>
 
-                {/* =================================================
-                    STEP 2 - SLOTS
-                ================================================== */}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Time Slot:</span>
+                  <span className="font-semibold text-blue-600">
+                    {selectedSlot ? `${selectedSlot.startTime} - ${selectedSlot.endTime}` : "Not selected"}
+                  </span>
+                </div>
 
-                {availableSlots.length > 0 && (
-                  <div className="booking-slots-section">
-                    <div className="booking-slots-header">
-                      <div>
-                        <span>STEP 2</span>
-
-                        <h3>Select Time Slot</h3>
-                      </div>
-
-                      <span className="booking-slot-count">
-                        {availableSlots.length}{" "}
-                        {availableSlots.length === 1
-                          ? "available"
-                          : "available"}
-                      </span>
-                    </div>
-
-                    <div className="booking-slots-grid">
-                      {availableSlots.map((slot, index) => {
-                        const isSelected = selectedSlot === slot;
-
-                        return (
-                          <button
-                            key={index}
-                            type="button"
-                            disabled={slot.isBooked}
-                            onClick={() => {
-                              setSelectedSlot(slot);
-                              setError("");
-                              setMessage("");
-                            }}
-                            className={`booking-slot ${
-                              isSelected ? "booking-slot-selected" : ""
-                            } ${slot.isBooked ? "booking-slot-booked" : ""}`}
-                          >
-                            <span className="booking-slot-icon">🕐</span>
-
-                            <span className="booking-slot-time">
-                              {slot.startTime}
-                              {" - "}
-                              {slot.endTime}
-                            </span>
-
-                            {isSelected && (
-                              <span className="booking-slot-check">✓</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* =================================================
-                    NO SLOTS
-                ================================================== */}
-
-                {message && availableSlots.length === 0 && (
-                  <div className="booking-no-slots">
-                    <span>📅</span>
-
-                    <div>
-                      <strong>No slots available</strong>
-
-                      <p>Try selecting another date.</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* =================================================
-                    ERROR
-                ================================================== */}
-
-                {error && (
-                  <div className="booking-error">
-                    <span>!</span>
-
-                    {error}
-                  </div>
-                )}
-
-                {/* =================================================
-                    SUCCESS
-                ================================================== */}
-
-                {message && availableSlots.length > 0 && !selectedSlot && (
-                  <div className="booking-success">✓ {message}</div>
-                )}
-
-                {/* =================================================
-                    STEP 3 - SUMMARY
-                ================================================== */}
-
-                {selectedSlot && (
-                  <div className="booking-summary">
-                    <div className="booking-summary-header">
-                      <span>STEP 3</span>
-
-                      <h3>Booking Summary</h3>
-                    </div>
-
-                    <div className="booking-summary-row">
-                      <span>Service</span>
-
-                      <strong>{service.name}</strong>
-                    </div>
-
-                    <div className="booking-summary-row">
-                      <span>Date</span>
-
-                      <strong>{date}</strong>
-                    </div>
-
-                    <div className="booking-summary-row">
-                      <span>Time</span>
-
-                      <strong>
-                        {selectedSlot.startTime}
-                        {" - "}
-                        {selectedSlot.endTime}
-                      </strong>
-                    </div>
-
-                    <div className="booking-summary-total">
-                      <span>Total</span>
-
-                      <strong>₹{service.price}</strong>
-                    </div>
-
-                    {/* CONFIRM */}
-
-                    <button
-                      type="button"
-                      onClick={handleConfirmBooking}
-                      disabled={booking}
-                      className="booking-confirm-button"
-                    >
-                      {booking ? "Confirming Booking..." : "Confirm Booking"}
-                    </button>
-                  </div>
-                )}
+                <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
+                  <span className="font-bold text-slate-700">Estimated Total:</span>
+                  <span className="text-2xl font-black text-slate-900">
+                    ₹{service.price ?? 0}
+                  </span>
+                </div>
               </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 text-[11px] text-slate-500 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Simulated payment will be completed after provider acceptance.</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleConfirmBooking}
+                disabled={booking || !date || !selectedSlot}
+                className="w-full py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-500/20 hover:shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {booking ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <CalendarCheck className="w-4 h-4" />
+                    <span>Confirm & Submit Booking</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
-      </section>
+      </main>
     </div>
   );
 };

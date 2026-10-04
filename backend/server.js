@@ -4,8 +4,13 @@ const dotenv = require("dotenv");
 const http = require("http");
 const { Server } = require("socket.io");
 
+// Load environment variables FIRST
+dotenv.config();
+
+// Database
 const connectDB = require("./config/db");
 
+// Middleware
 const errorMiddleware = require("./middleware/errorMiddleware");
 
 // Routes
@@ -17,31 +22,40 @@ const availabilityRoutes = require("./routes/availabilityRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
-const notificationRoutes = require("./routes/notificationRoutes");
 const messageRoutes = require("./routes/messageRoutes");
-const adminRoutes = require("./routes/adminRoutes");
-const providerRoutes = require("./routes/providerRoutes");
-const customerRoutes = require("./routes/customerRoutes");
-const adminDashboardRoutes = require("./routes/adminDashboardRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 
-// Models
-const Message = require("./models/Message");
-const Booking = require("./models/Booking");
-const Customer = require("./models/Customer");
-const ServiceProvider = require("./models/ServiceProvider");
+const adminRoutes = require("./routes/adminRoutes");
+const adminDashboardRoutes = require("./routes/adminDashboardRoutes");
 
-dotenv.config();
+const providerRoutes = require("./routes/providerRoutes");
+const customerRoutes = require("./routes/customerRoutes");
+
+// Model
+const Message = require("./models/Message");
+
+// =====================================================
+// DATABASE
+// =====================================================
 
 connectDB();
 
+// =====================================================
+// EXPRESS APP
+// =====================================================
+
 const app = express();
+
+// =====================================================
+// HTTP SERVER
+// =====================================================
 
 const server = http.createServer(app);
 
-/* =====================================================
-   SOCKET.IO
-===================================================== */
+// =====================================================
+// SOCKET.IO
+// =====================================================
 
 const io = new Server(server, {
   cors: {
@@ -50,9 +64,9 @@ const io = new Server(server, {
   },
 });
 
-/* =====================================================
-   MIDDLEWARE
-===================================================== */
+// =====================================================
+// GLOBAL MIDDLEWARE
+// =====================================================
 
 app.use(
   cors({
@@ -64,11 +78,15 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
+// =====================================================
+// STATIC UPLOADS
+// =====================================================
+
 app.use("/uploads", express.static("uploads"));
 
-/* =====================================================
-   ROOT
-===================================================== */
+// =====================================================
+// ROOT ROUTE
+// =====================================================
 
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -77,128 +95,121 @@ app.get("/", (req, res) => {
   });
 });
 
-/* =====================================================
-   REST API ROUTES
-===================================================== */
+// =====================================================
+// API ROUTES
+// =====================================================
 
+// Authentication
 app.use("/api/auth", authRoutes);
 
+// Users
 app.use("/api/users", userRoutes);
 
+// Categories
 app.use("/api/categories", categoryRoutes);
 
+// Services
 app.use("/api/services", serviceRoutes);
 
+// Availability
 app.use("/api/availability", availabilityRoutes);
 
+// Bookings
 app.use("/api/bookings", bookingRoutes);
 
+// Payments
 app.use("/api/payments", paymentRoutes);
 
+// Reviews
 app.use("/api/reviews", reviewRoutes);
 
-app.use("/api/notifications", notificationRoutes);
-
+// Messages
 app.use("/api/messages", messageRoutes);
 
+// Notifications
+app.use("/api/notifications", notificationRoutes);
+
+// Profiles
+app.use("/api/profiles", profileRoutes);
+
+// =====================================================
+// ADMIN ROUTES
+// =====================================================
+
+// Admin management
 app.use("/api/admin", adminRoutes);
+
+// Admin dashboard
+app.use("/api/admin/dashboard", adminDashboardRoutes);
+
+// =====================================================
+// PROVIDER ROUTES
+// =====================================================
 
 app.use("/api/provider", providerRoutes);
 
+// =====================================================
+// CUSTOMER ROUTES
+// =====================================================
+
 app.use("/api/customer", customerRoutes);
 
-app.use("/api/admin", adminDashboardRoutes);
-
-app.use("/api/profiles", profileRoutes);
-
-/* =====================================================
-   SOCKET.IO CHAT
-===================================================== */
+// =====================================================
+// SOCKET.IO CHAT
+// =====================================================
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  /* ===================================================
-     JOIN BOOKING CONVERSATION
-  =================================================== */
+  // ---------------------------------------------------
+  // JOIN CONVERSATION
+  // ---------------------------------------------------
 
-  socket.on("joinConversation", async (data) => {
+  socket.on("joinConversation", (conversationId) => {
+    if (!conversationId) {
+      return;
+    }
+
+    socket.join(conversationId);
+
+    console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
+  });
+
+  // ---------------------------------------------------
+  // SEND MESSAGE
+  // ---------------------------------------------------
+
+  socket.on("sendMessage", async (data) => {
     try {
-      const { bookingId, userId } = data;
+      const { conversationId, sender, receiver, message } = data;
 
-      if (!bookingId || !userId) {
+      if (!conversationId || !sender || !receiver || !message) {
         socket.emit("messageError", {
           success: false,
-          message: "Booking ID and User ID are required",
+          message: "All message fields are required",
         });
 
         return;
       }
 
-      const booking = await Booking.findById(bookingId);
-
-      if (!booking) {
-        socket.emit("messageError", {
-          success: false,
-          message: "Booking not found",
-        });
-
-        return;
-      }
-
-      const customer = await Customer.findById(booking.customer);
-
-      const provider = await ServiceProvider.findById(booking.provider);
-
-      if (!customer || !provider) {
-        socket.emit("messageError", {
-          success: false,
-          message: "Booking participants not found",
-        });
-
-        return;
-      }
-
-      /* -----------------------------------------------
-         Check whether user belongs to this booking
-      ------------------------------------------------ */
-
-      const customerUserId = customer.user.toString();
-
-      const providerUserId = provider.user.toString();
-
-      const currentUserId = userId.toString();
-
-      const isCustomer = customerUserId === currentUserId;
-
-      const isProvider = providerUserId === currentUserId;
-
-      if (!isCustomer && !isProvider) {
-        socket.emit("messageError", {
-          success: false,
-          message: "You are not a participant of this booking",
-        });
-
-        return;
-      }
-
-      /* -----------------------------------------------
-         Booking-based conversation ID
-      ------------------------------------------------ */
-
-      const conversationId = `booking_${bookingId}`;
-
-      socket.join(conversationId);
-
-      console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
-
-      socket.emit("conversationJoined", {
-        success: true,
+      // Save message
+      const savedMessage = await Message.create({
         conversationId,
-        bookingId,
+        sender,
+        receiver,
+        message,
       });
+
+      // Populate sender and receiver
+      const populatedMessage = await Message.findById(savedMessage._id)
+        .populate("sender", "name email role")
+        .populate("receiver", "name email role");
+
+      // Send message to everyone
+      // inside the conversation
+      io.to(conversationId).emit("receiveMessage", populatedMessage);
     } catch (error) {
-      console.error("JOIN CONVERSATION ERROR:", error);
+      console.error("SOCKET MESSAGE ERROR:", error);
 
       socket.emit("messageError", {
         success: false,
@@ -207,202 +218,24 @@ io.on("connection", (socket) => {
     }
   });
 
-  /* ===================================================
-     SEND MESSAGE
-  =================================================== */
-
-  socket.on("sendMessage", async (data, callback) => {
-    try {
-      const { bookingId, senderId, message } = data;
-
-      /* -----------------------------------------------
-         Validate data
-      ------------------------------------------------ */
-
-      if (!bookingId || !senderId || !message) {
-        const response = {
-          success: false,
-          message: "Booking ID, sender ID and message are required",
-        };
-
-        socket.emit("messageError", response);
-
-        if (callback) {
-          callback(response);
-        }
-
-        return;
-      }
-
-      const trimmedMessage = message.trim();
-
-      if (!trimmedMessage) {
-        const response = {
-          success: false,
-          message: "Message cannot be empty",
-        };
-
-        socket.emit("messageError", response);
-
-        if (callback) {
-          callback(response);
-        }
-
-        return;
-      }
-
-      /* -----------------------------------------------
-         Find booking
-      ------------------------------------------------ */
-
-      const booking = await Booking.findById(bookingId);
-
-      if (!booking) {
-        const response = {
-          success: false,
-          message: "Booking not found",
-        };
-
-        socket.emit("messageError", response);
-
-        if (callback) {
-          callback(response);
-        }
-
-        return;
-      }
-
-      /* -----------------------------------------------
-         Find customer and provider
-      ------------------------------------------------ */
-
-      const customer = await Customer.findById(booking.customer);
-
-      const provider = await ServiceProvider.findById(booking.provider);
-
-      if (!customer || !provider) {
-        const response = {
-          success: false,
-          message: "Booking participants not found",
-        };
-
-        socket.emit("messageError", response);
-
-        if (callback) {
-          callback(response);
-        }
-
-        return;
-      }
-
-      const customerUserId = customer.user.toString();
-
-      const providerUserId = provider.user.toString();
-
-      const currentUserId = senderId.toString();
-
-      /* -----------------------------------------------
-         Determine receiver
-      ------------------------------------------------ */
-
-      let receiverId;
-
-      if (customerUserId === currentUserId) {
-        receiverId = provider.user;
-      } else if (providerUserId === currentUserId) {
-        receiverId = customer.user;
-      } else {
-        const response = {
-          success: false,
-          message: "You are not a participant of this booking",
-        };
-
-        socket.emit("messageError", response);
-
-        if (callback) {
-          callback(response);
-        }
-
-        return;
-      }
-
-      /* -----------------------------------------------
-         Conversation ID
-      ------------------------------------------------ */
-
-      const conversationId = `booking_${bookingId}`;
-
-      /* -----------------------------------------------
-         Save message
-      ------------------------------------------------ */
-
-      const savedMessage = await Message.create({
-        conversationId,
-        sender: senderId,
-        receiver: receiverId,
-        message: trimmedMessage,
-      });
-
-      /* -----------------------------------------------
-         Populate sender and receiver
-      ------------------------------------------------ */
-
-      await savedMessage.populate("sender", "name email role");
-
-      await savedMessage.populate("receiver", "name email role");
-
-      /* -----------------------------------------------
-         Send to everyone in this booking room
-      ------------------------------------------------ */
-
-      io.to(conversationId).emit("receiveMessage", savedMessage);
-
-      /* -----------------------------------------------
-         Success callback
-      ------------------------------------------------ */
-
-      if (callback) {
-        callback({
-          success: true,
-          message: savedMessage,
-        });
-      }
-
-      console.log(`Message sent in booking ${bookingId}`);
-    } catch (error) {
-      console.error("SEND MESSAGE ERROR:", error);
-
-      const response = {
-        success: false,
-        message: error.message,
-      };
-
-      socket.emit("messageError", response);
-
-      if (callback) {
-        callback(response);
-      }
-    }
-  });
-
-  /* ===================================================
-     DISCONNECT
-  =================================================== */
+  // ---------------------------------------------------
+  // DISCONNECT
+  // ---------------------------------------------------
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
   });
 });
 
-/* =====================================================
-   ERROR MIDDLEWARE
-===================================================== */
+// =====================================================
+// ERROR MIDDLEWARE
+// =====================================================
 
 app.use(errorMiddleware);
 
-/* =====================================================
-   START SERVER
-===================================================== */
+// =====================================================
+// SERVER
+// =====================================================
 
 const PORT = process.env.PORT || 5000;
 

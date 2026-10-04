@@ -1,44 +1,39 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 import Loading from "../../components/Loading";
+import {
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  Wallet,
+  PlusCircle,
+  Clock,
+  ArrowRight,
+  ChevronRight,
+  Sparkles,
+  TrendingUp,
+  AlertCircle,
+  User,
+} from "lucide-react";
 
 const ProviderDashboard = () => {
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // =====================================================
-  // FETCH DASHBOARD
-  // =====================================================
 
   const fetchDashboard = async () => {
     try {
       setLoading(true);
       setError("");
-
       const response = await api.get("/provider/dashboard");
-
-      console.log("PROVIDER DASHBOARD RESPONSE:", response.data);
-
-      // Backend returns:
-      //
-      // {
-      //   success: true,
-      //   dashboard: {
-      //     totalServices: 1,
-      //     totalBookings: 1,
-      //     completedBookings: 0,
-      //     totalEarnings: 0
-      //   }
-      // }
-
       setDashboard(response.data?.dashboard || {});
-    } catch (error) {
-      console.error("Provider dashboard error:", error);
-
+    } catch (err) {
+      console.error("Provider dashboard error:", err);
       setError(
-        error.response?.data?.message || "Unable to load provider dashboard.",
+        err.response?.data?.message || "Unable to load provider dashboard.",
       );
     } finally {
       setLoading(false);
@@ -49,226 +44,197 @@ const ProviderDashboard = () => {
     fetchDashboard();
   }, []);
 
-  // =====================================================
-  // LOADING
-  // =====================================================
-
   if (loading) {
-    return <Loading />;
+    return <Loading message="Loading provider dashboard analytics..." />;
   }
-
-  // =====================================================
-  // ERROR
-  // =====================================================
-
-  if (error) {
-    return (
-      <div className="provider-dashboard-page">
-        <div className="sc-container">
-          <div className="provider-dashboard-error">
-            <div className="provider-dashboard-error-icon">⚠️</div>
-
-            <h2>Unable to Load Dashboard</h2>
-
-            <p>{error}</p>
-
-            <button
-              type="button"
-              className="provider-dashboard-retry"
-              onClick={fetchDashboard}
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // =====================================================
-  // VALUES
-  // =====================================================
 
   const totalServices = dashboard?.totalServices ?? 0;
-
   const totalBookings = dashboard?.totalBookings ?? 0;
-
   const completedBookings = dashboard?.completedBookings ?? 0;
-
   const totalEarnings = dashboard?.totalEarnings ?? 0;
 
-  // =====================================================
-  // PAGE
-  // =====================================================
-
   return (
-    <div className="provider-dashboard-page">
-      <div className="sc-container">
-        {/* =================================================
-            PAGE HEADER
-        ================================================== */}
-
-        <div className="provider-dashboard-header">
+    <div className="min-h-screen bg-slate-50 pb-16">
+      {/* Header Banner */}
+      <section className="bg-slate-900 text-white py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
-            <p className="provider-dashboard-eyebrow">PROVIDER WORKSPACE</p>
-
-            <h1 className="provider-dashboard-title">Provider Dashboard</h1>
-
-            <p className="provider-dashboard-subtitle">
-              Manage your services, bookings and earnings from one place.
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold mb-2 border border-blue-400/20">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Provider Workspace</span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
+              Hello, {user?.name || "Professional"}!
+            </h1>
+            <p className="text-slate-400 text-xs sm:text-sm mt-1">
+              Manage your service catalog, respond to client bookings, and track your revenue.
             </p>
+          </div>
+
+          <div className="flex items-center gap-3 self-start md:self-auto">
+            <Link
+              to="/provider/services/add"
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 hover:shadow-lg transition-all"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Add New Service</span>
+            </Link>
           </div>
         </div>
+      </section>
 
-        {/* =================================================
-            STATISTICS
-        ================================================== */}
-
-        <div className="provider-stats-grid">
-          {/* TOTAL SERVICES */}
-
-          <div className="provider-stat-card">
-            <div className="provider-stat-top">
-              <div className="provider-stat-icon service-icon">🛠️</div>
-
-              <span className="provider-stat-label">Total Services</span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {error && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <p>{error}</p>
             </div>
-
-            <div className="provider-stat-value">{totalServices}</div>
-
-            <p className="provider-stat-description">
-              Services you currently offer
-            </p>
+            <button
+              onClick={fetchDashboard}
+              className="text-xs font-bold text-rose-700 underline"
+            >
+              Retry
+            </button>
           </div>
+        )}
 
-          {/* TOTAL BOOKINGS */}
-
-          <div className="provider-stat-card">
-            <div className="provider-stat-top">
-              <div className="provider-stat-icon booking-icon">📅</div>
-
-              <span className="provider-stat-label">Total Bookings</span>
+        {/* 4 Metric Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {/* Active Services */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <Briefcase className="w-6 h-6" />
             </div>
-
-            <div className="provider-stat-value">{totalBookings}</div>
-
-            <p className="provider-stat-description">
-              Customer bookings received
-            </p>
-          </div>
-
-          {/* COMPLETED */}
-
-          <div className="provider-stat-card">
-            <div className="provider-stat-top">
-              <div className="provider-stat-icon completed-icon">✓</div>
-
-              <span className="provider-stat-label">Completed</span>
-            </div>
-
-            <div className="provider-stat-value">{completedBookings}</div>
-
-            <p className="provider-stat-description">
-              Successfully completed bookings
-            </p>
-          </div>
-
-          {/* EARNINGS */}
-
-          <div className="provider-stat-card">
-            <div className="provider-stat-top">
-              <div className="provider-stat-icon earnings-icon">₹</div>
-
-              <span className="provider-stat-label">Earnings</span>
-            </div>
-
-            <div className="provider-stat-value">₹{totalEarnings}</div>
-
-            <p className="provider-stat-description">
-              Total earnings from successful payments
-            </p>
-          </div>
-        </div>
-
-        {/* =================================================
-            QUICK ACTIONS
-        ================================================== */}
-
-        <div className="provider-actions-section">
-          <div className="provider-section-header">
             <div>
-              <p className="provider-section-eyebrow">QUICK ACTIONS</p>
-
-              <h2 className="provider-section-title">Manage your work</h2>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Active Services</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-0.5">{totalServices}</h3>
+              <p className="text-[11px] text-slate-600">Listed on catalog</p>
             </div>
-
-            <p className="provider-section-description">
-              Quickly access your main provider activities.
-            </p>
           </div>
 
-          <div className="provider-actions-grid">
-            {/* MY SERVICES */}
+          {/* Total Bookings */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <Calendar className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Total Bookings</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-0.5">{totalBookings}</h3>
+              <p className="text-[11px] text-slate-600">Customer requests</p>
+            </div>
+          </div>
 
-            <Link to="/provider/services" className="provider-action-card">
-              <div className="provider-action-icon">🛠️</div>
+          {/* Completed Jobs */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Completed Jobs</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-0.5">{completedBookings}</h3>
+              <p className="text-[11px] text-slate-600">Fulfilled appointments</p>
+            </div>
+          </div>
 
-              <div className="provider-action-content">
-                <h3>My Services</h3>
-
-                <p>Add, update and manage the services you offer.</p>
-              </div>
-
-              <span className="provider-action-arrow">→</span>
-            </Link>
-
-            {/* BOOKINGS */}
-
-            <Link to="/provider/bookings" className="provider-action-card">
-              <div className="provider-action-icon">📅</div>
-
-              <div className="provider-action-content">
-                <h3>Bookings</h3>
-
-                <p>View and manage your customer bookings.</p>
-              </div>
-
-              <span className="provider-action-arrow">→</span>
-            </Link>
-
-            {/* EARNINGS */}
-
-            <Link to="/provider/earnings" className="provider-action-card">
-              <div className="provider-action-icon">₹</div>
-
-              <div className="provider-action-content">
-                <h3>Earnings</h3>
-
-                <p>View your earnings and payment information.</p>
-              </div>
-
-              <span className="provider-action-arrow">→</span>
-            </Link>
+          {/* Total Earnings */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <Wallet className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-600">Total Earnings</p>
+              <h3 className="text-2xl font-black text-slate-900 mt-0.5">₹{totalEarnings}</h3>
+              <p className="text-[11px] text-slate-600">Simulated revenue</p>
+            </div>
           </div>
         </div>
 
-        {/* =================================================
-            BOTTOM INFORMATION
-        ================================================== */}
-
-        <div className="provider-dashboard-tip">
-          <div className="provider-tip-icon">💡</div>
-
-          <div>
-            <h3>Keep your services updated</h3>
-
-            <p>
-              Make sure your service information, pricing and availability are
-              up to date so customers can easily find and book your services.
-            </p>
+        {/* Quick Actions Shortcuts */}
+        <section>
+          <div className="mb-4">
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+              Management
+            </span>
+            <h2 className="text-lg font-bold text-slate-900">Workspace Navigation</h2>
           </div>
-        </div>
-      </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              to="/provider/services"
+              className="p-5 bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                    My Services
+                  </h3>
+                  <p className="text-xs text-slate-600">Edit listings & prices</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+            </Link>
+
+            <Link
+              to="/provider/bookings"
+              className="p-5 bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-amber-600 transition-colors">
+                    Customer Bookings
+                  </h3>
+                  <p className="text-xs text-slate-600">Accept or complete</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-600 group-hover:translate-x-1 transition-all" />
+            </Link>
+
+            <Link
+              to="/provider/earnings"
+              className="p-5 bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">
+                    Earnings & Payouts
+                  </h3>
+                  <p className="text-xs text-slate-600">View payout history</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+            </Link>
+
+            <Link
+              to="/profile"
+              className="p-5 bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 hover:shadow-md transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <User className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                    Provider Profile
+                  </h3>
+                  <p className="text-xs text-slate-600">Bio, city, phone</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+            </Link>
+          </div>
+        </section>
+      </main>
     </div>
   );
 };

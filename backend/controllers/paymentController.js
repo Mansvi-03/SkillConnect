@@ -4,7 +4,10 @@ const Customer = require("../models/Customer");
 const ServiceProvider = require("../models/ServiceProvider");
 const generateNotification = require("../utils/generateNotification");
 
+// =====================================================
 // CREATE PAYMENT
+// =====================================================
+
 const createPayment = async (req, res) => {
   try {
     const { booking, paymentMethod } = req.body;
@@ -86,15 +89,16 @@ const createPayment = async (req, res) => {
 
     await bookingData.save();
 
-    const customerProfile = await Customer.findById(booking.customer);
+    // Payment notification
+    const customerProfile = await Customer.findById(bookingData.customer);
 
     if (customerProfile) {
       await generateNotification({
         recipient: customerProfile.user,
         type: "Payment",
         title: "Payment Successful",
-        message: `Your payment of ₹${booking.amount} was successful.`,
-        relatedBooking: booking._id,
+        message: `Your payment of ₹${bookingData.amount} was successful.`,
+        relatedBooking: bookingData._id,
       });
     }
 
@@ -104,6 +108,8 @@ const createPayment = async (req, res) => {
       payment,
     });
   } catch (error) {
+    console.error("CREATE PAYMENT ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -111,10 +117,19 @@ const createPayment = async (req, res) => {
   }
 };
 
+// =====================================================
 // GET MY PAYMENTS
+// Customer → own payments
+// Provider → payments received for own services
+// =====================================================
+
 const getMyPayments = async (req, res) => {
   try {
     let query = {};
+
+    // -----------------------------------------------
+    // CUSTOMER
+    // -----------------------------------------------
 
     if (req.user.role === "customer") {
       const customer = await Customer.findOne({
@@ -131,6 +146,10 @@ const getMyPayments = async (req, res) => {
       query.customer = customer._id;
     }
 
+    // -----------------------------------------------
+    // PROVIDER
+    // -----------------------------------------------
+
     if (req.user.role === "provider") {
       const provider = await ServiceProvider.findOne({
         user: req.user._id,
@@ -146,10 +165,48 @@ const getMyPayments = async (req, res) => {
       query.provider = provider._id;
     }
 
+    // -----------------------------------------------
+    // GET PAYMENTS
+    // -----------------------------------------------
+
     const payments = await Payment.find(query)
-      .populate("booking")
-      .populate("customer")
-      .populate("provider")
+      .populate({
+        path: "booking",
+        populate: [
+          {
+            path: "service",
+            select: "name price location",
+          },
+          {
+            path: "customer",
+            populate: {
+              path: "user",
+              select: "name email phone",
+            },
+          },
+          {
+            path: "provider",
+            populate: {
+              path: "user",
+              select: "name email phone",
+            },
+          },
+        ],
+      })
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email phone",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email phone",
+        },
+      })
       .sort({ paidAt: -1 });
 
     res.status(200).json({
@@ -158,6 +215,8 @@ const getMyPayments = async (req, res) => {
       payments,
     });
   } catch (error) {
+    console.error("GET MY PAYMENTS ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -165,13 +224,50 @@ const getMyPayments = async (req, res) => {
   }
 };
 
+// =====================================================
 // GET SINGLE PAYMENT
+// =====================================================
+
 const getPaymentById = async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id)
-      .populate("booking")
-      .populate("customer")
-      .populate("provider");
+      .populate({
+        path: "booking",
+        populate: [
+          {
+            path: "service",
+            select: "name price location",
+          },
+          {
+            path: "customer",
+            populate: {
+              path: "user",
+              select: "name email phone",
+            },
+          },
+          {
+            path: "provider",
+            populate: {
+              path: "user",
+              select: "name email phone",
+            },
+          },
+        ],
+      })
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email phone",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email phone",
+        },
+      });
 
     if (!payment) {
       return res.status(404).json({
@@ -180,7 +276,10 @@ const getPaymentById = async (req, res) => {
       });
     }
 
-    // Check customer ownership
+    // -----------------------------------------------
+    // CUSTOMER OWNERSHIP
+    // -----------------------------------------------
+
     if (req.user.role === "customer") {
       const customer = await Customer.findOne({
         user: req.user._id,
@@ -197,7 +296,10 @@ const getPaymentById = async (req, res) => {
       }
     }
 
-    // Check provider ownership
+    // -----------------------------------------------
+    // PROVIDER OWNERSHIP
+    // -----------------------------------------------
+
     if (req.user.role === "provider") {
       const provider = await ServiceProvider.findOne({
         user: req.user._id,
@@ -219,6 +321,8 @@ const getPaymentById = async (req, res) => {
       payment,
     });
   } catch (error) {
+    console.error("GET PAYMENT ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
