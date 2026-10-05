@@ -1,11 +1,15 @@
 const Booking = require("../models/Booking");
+const Payment = require("../models/Payment");
 const Customer = require("../models/Customer");
 const ServiceProvider = require("../models/ServiceProvider");
 const Service = require("../models/Service");
 const Availability = require("../models/Availability");
 const generateNotification = require("../utils/generateNotification");
 
+// =====================================================
 // CREATE BOOKING
+// =====================================================
+
 const createBooking = async (req, res) => {
   try {
     const { service, bookingDate, startTime, endTime } = req.body;
@@ -80,6 +84,8 @@ const createBooking = async (req, res) => {
         endTime,
       },
       amount: serviceData.price,
+      status: "Pending",
+      paymentStatus: "Pending",
     });
 
     // Notify provider
@@ -103,6 +109,8 @@ const createBooking = async (req, res) => {
       booking,
     });
   } catch (error) {
+    console.error("CREATE BOOKING ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -110,11 +118,16 @@ const createBooking = async (req, res) => {
   }
 };
 
+// =====================================================
 // GET MY BOOKINGS
+// Customer + Provider
+// =====================================================
+
 const getMyBookings = async (req, res) => {
   try {
     let query = {};
 
+    // CUSTOMER
     if (req.user.role === "customer") {
       const customer = await Customer.findOne({
         user: req.user._id,
@@ -130,6 +143,7 @@ const getMyBookings = async (req, res) => {
       query.customer = customer._id;
     }
 
+    // PROVIDER
     if (req.user.role === "provider") {
       const provider = await ServiceProvider.findOne({
         user: req.user._id,
@@ -146,8 +160,20 @@ const getMyBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
-      .populate("customer")
-      .populate("provider")
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email phone role",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email phone role",
+        },
+      })
       .populate("service")
       .sort({ bookingDate: -1 });
 
@@ -157,6 +183,8 @@ const getMyBookings = async (req, res) => {
       bookings,
     });
   } catch (error) {
+    console.error("GET MY BOOKINGS ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -164,12 +192,27 @@ const getMyBookings = async (req, res) => {
   }
 };
 
+// =====================================================
 // GET SINGLE BOOKING
+// =====================================================
+
 const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
-      .populate("customer")
-      .populate("provider")
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email phone role",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email phone role",
+        },
+      })
       .populate("service");
 
     if (!booking) {
@@ -179,7 +222,7 @@ const getBookingById = async (req, res) => {
       });
     }
 
-    // Check customer ownership
+    // CUSTOMER OWNERSHIP
     if (req.user.role === "customer") {
       const customer = await Customer.findOne({
         user: req.user._id,
@@ -196,7 +239,7 @@ const getBookingById = async (req, res) => {
       }
     }
 
-    // Check provider ownership
+    // PROVIDER OWNERSHIP
     if (req.user.role === "provider") {
       const provider = await ServiceProvider.findOne({
         user: req.user._id,
@@ -218,6 +261,8 @@ const getBookingById = async (req, res) => {
       booking,
     });
   } catch (error) {
+    console.error("GET BOOKING ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -225,7 +270,10 @@ const getBookingById = async (req, res) => {
   }
 };
 
+// =====================================================
 // ACCEPT BOOKING
+// =====================================================
+
 const acceptBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -278,6 +326,8 @@ const acceptBooking = async (req, res) => {
       booking,
     });
   } catch (error) {
+    console.error("ACCEPT BOOKING ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -285,7 +335,10 @@ const acceptBooking = async (req, res) => {
   }
 };
 
+// =====================================================
 // REJECT BOOKING
+// =====================================================
+
 const rejectBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -353,6 +406,8 @@ const rejectBooking = async (req, res) => {
       booking,
     });
   } catch (error) {
+    console.error("REJECT BOOKING ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -360,7 +415,10 @@ const rejectBooking = async (req, res) => {
   }
 };
 
+// =====================================================
 // CANCEL BOOKING
+// =====================================================
+
 const cancelBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -394,7 +452,7 @@ const cancelBooking = async (req, res) => {
 
     await booking.save();
 
-    // Make the time slot available again
+    // Make time slot available again
     await Availability.updateOne(
       {
         service: booking.service,
@@ -428,6 +486,8 @@ const cancelBooking = async (req, res) => {
       booking,
     });
   } catch (error) {
+    console.error("CANCEL BOOKING ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -435,10 +495,16 @@ const cancelBooking = async (req, res) => {
   }
 };
 
+// =====================================================
 // COMPLETE BOOKING
+// =====================================================
+
 const completeBooking = async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id);
+    const booking = await Booking.findById(req.params.id)
+      .populate("customer")
+      .populate("provider")
+      .populate("service");
 
     if (!booking) {
       return res.status(404).json({
@@ -447,16 +513,27 @@ const completeBooking = async (req, res) => {
       });
     }
 
+    // -------------------------------------------------
+    // PROVIDER OWNERSHIP
+    // -------------------------------------------------
+
     const provider = await ServiceProvider.findOne({
       user: req.user._id,
     });
 
-    if (!provider || booking.provider.toString() !== provider._id.toString()) {
+    if (
+      !provider ||
+      booking.provider._id.toString() !== provider._id.toString()
+    ) {
       return res.status(403).json({
         success: false,
         message: "You can only manage your own bookings",
       });
     }
+
+    // -------------------------------------------------
+    // CHECK STATUS
+    // -------------------------------------------------
 
     if (booking.status !== "Accepted") {
       return res.status(400).json({
@@ -465,35 +542,126 @@ const completeBooking = async (req, res) => {
       });
     }
 
+    // -------------------------------------------------
+    // MARK BOOKING COMPLETED
+    // -------------------------------------------------
+
     booking.status = "Completed";
 
     await booking.save();
 
-    // Notify customer
-    const customerProfile = await Customer.findById(booking.customer);
+    // -------------------------------------------------
+    // CREATE SUCCESSFUL PAYMENT
+    // -------------------------------------------------
 
-    if (customerProfile) {
-      await generateNotification({
-        recipient: customerProfile.user,
-        type: "BookingStatus",
-        title: "Booking Completed",
-        message: "Your booking has been marked as completed.",
-        relatedBooking: booking._id,
+    let payment = await Payment.findOne({
+      booking: booking._id,
+    });
+
+    if (!payment) {
+      const transactionId =
+        "TXN-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+
+      payment = await Payment.create({
+        booking: booking._id,
+        customer: booking.customer._id,
+        provider: booking.provider._id,
+        amount: booking.amount,
+        paymentMethod: "Demo Cash",
+        transactionId,
+        status: "Success",
+        paidAt: new Date(),
       });
     }
 
+    // -------------------------------------------------
+    // UPDATE BOOKING PAYMENT STATUS
+    // -------------------------------------------------
+
+    booking.paymentStatus = "Paid";
+
+    await booking.save();
+
+    // -------------------------------------------------
+    // NOTIFY CUSTOMER
+    // -------------------------------------------------
+
+    try {
+      await generateNotification({
+        recipient: booking.customer.user,
+        type: "BookingStatus",
+        title: "Booking Completed",
+        message: `Your ${booking.service?.name || "service"} booking has been completed successfully.`,
+        relatedBooking: booking._id,
+      });
+    } catch (notificationError) {
+      console.error(
+        "CUSTOMER COMPLETION NOTIFICATION ERROR:",
+        notificationError.message,
+      );
+    }
+
+    // -------------------------------------------------
+    // NOTIFY CUSTOMER ABOUT PAYMENT
+    // -------------------------------------------------
+
+    try {
+      await generateNotification({
+        recipient: booking.customer.user,
+        type: "Payment",
+        title: "Payment Successful",
+        message: `Payment of ₹${booking.amount} has been recorded successfully.`,
+        relatedBooking: booking._id,
+      });
+    } catch (notificationError) {
+      console.error(
+        "CUSTOMER PAYMENT NOTIFICATION ERROR:",
+        notificationError.message,
+      );
+    }
+
+    // -------------------------------------------------
+    // NOTIFY PROVIDER ABOUT EARNINGS
+    // -------------------------------------------------
+
+    try {
+      await generateNotification({
+        recipient: booking.provider.user,
+        type: "Payment",
+        title: "Payment Received",
+        message: `You earned ₹${booking.amount} from ${booking.service?.name || "your service"}.`,
+        relatedBooking: booking._id,
+      });
+    } catch (notificationError) {
+      console.error(
+        "PROVIDER PAYMENT NOTIFICATION ERROR:",
+        notificationError.message,
+      );
+    }
+
+    // -------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------
+
     res.status(200).json({
       success: true,
-      message: "Booking completed successfully",
+      message: "Booking completed and payment recorded successfully",
       booking,
+      payment,
     });
   } catch (error) {
+    console.error("COMPLETE BOOKING ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 module.exports = {
   createBooking,

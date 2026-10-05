@@ -4,16 +4,28 @@ const dotenv = require("dotenv");
 const http = require("http");
 const { Server } = require("socket.io");
 
-// Load environment variables FIRST
+// =====================================================
+// LOAD ENVIRONMENT VARIABLES
+// =====================================================
+
 dotenv.config();
 
-// Database
+// =====================================================
+// DATABASE
+// =====================================================
+
 const connectDB = require("./config/db");
 
-// Middleware
+// =====================================================
+// ERROR MIDDLEWARE
+// =====================================================
+
 const errorMiddleware = require("./middleware/errorMiddleware");
 
-// Routes
+// =====================================================
+// ROUTES
+// =====================================================
+
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
@@ -32,11 +44,14 @@ const adminDashboardRoutes = require("./routes/adminDashboardRoutes");
 const providerRoutes = require("./routes/providerRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 
-// Model
+// =====================================================
+// MODELS
+// =====================================================
+
 const Message = require("./models/Message");
 
 // =====================================================
-// DATABASE
+// DATABASE CONNECTION
 // =====================================================
 
 connectDB();
@@ -76,7 +91,11 @@ app.use(
 
 app.use(express.json());
 
-app.use(express.urlencoded({ extended: true }));
+app.use(
+  express.urlencoded({
+    extended: true,
+  }),
+);
 
 // =====================================================
 // STATIC UPLOADS
@@ -136,10 +155,8 @@ app.use("/api/profiles", profileRoutes);
 // ADMIN ROUTES
 // =====================================================
 
-// Admin management
 app.use("/api/admin", adminRoutes);
 
-// Admin dashboard
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 
 // =====================================================
@@ -161,9 +178,9 @@ app.use("/api/customer", customerRoutes);
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // ---------------------------------------------------
+  // ===================================================
   // JOIN CONVERSATION
-  // ---------------------------------------------------
+  // ===================================================
 
   socket.on("joinConversation", (conversationId) => {
     if (!conversationId) {
@@ -175,15 +192,25 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined conversation ${conversationId}`);
   });
 
-  // ---------------------------------------------------
+  // ===================================================
   // SEND MESSAGE
-  // ---------------------------------------------------
+  // ===================================================
 
   socket.on("sendMessage", async (data) => {
     try {
       const { conversationId, sender, receiver, message } = data;
 
-      if (!conversationId || !sender || !receiver || !message) {
+      // -----------------------------------------------
+      // VALIDATE MESSAGE
+      // -----------------------------------------------
+
+      if (
+        !conversationId ||
+        !sender ||
+        !receiver ||
+        !message ||
+        !message.trim()
+      ) {
         socket.emit("messageError", {
           success: false,
           message: "All message fields are required",
@@ -192,35 +219,45 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Save message
+      // -----------------------------------------------
+      // SAVE MESSAGE
+      // -----------------------------------------------
+
       const savedMessage = await Message.create({
         conversationId,
         sender,
         receiver,
-        message,
+        message: message.trim(),
       });
 
-      // Populate sender and receiver
+      // -----------------------------------------------
+      // POPULATE MESSAGE
+      // -----------------------------------------------
+
       const populatedMessage = await Message.findById(savedMessage._id)
         .populate("sender", "name email role")
         .populate("receiver", "name email role");
 
-      // Send message to everyone
-      // inside the conversation
+      // -----------------------------------------------
+      // SEND TO CONVERSATION
+      // -----------------------------------------------
+
       io.to(conversationId).emit("receiveMessage", populatedMessage);
+
+      console.log(`Message sent in conversation ${conversationId}`);
     } catch (error) {
       console.error("SOCKET MESSAGE ERROR:", error);
 
       socket.emit("messageError", {
         success: false,
-        message: error.message,
+        message: error.message || "Unable to send message",
       });
     }
   });
 
-  // ---------------------------------------------------
+  // ===================================================
   // DISCONNECT
-  // ---------------------------------------------------
+  // ===================================================
 
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
@@ -228,13 +265,13 @@ io.on("connection", (socket) => {
 });
 
 // =====================================================
-// ERROR MIDDLEWARE
+// ERROR HANDLER
 // =====================================================
 
 app.use(errorMiddleware);
 
 // =====================================================
-// SERVER
+// START SERVER
 // =====================================================
 
 const PORT = process.env.PORT || 5000;

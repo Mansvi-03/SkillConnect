@@ -4,27 +4,44 @@ const {
   getProfile,
   createProfile,
   updateProfile,
+  changePassword,
   deleteProfile,
 } = require("../controllers/profileController");
 
 const { protect } = require("../middleware/authMiddleware");
+
 const upload = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
 
-// Get logged-in user's profile
-router.get("/me", protect, getProfile);
+// =====================================================
+// GET PROFILE
+// =====================================================
 
-// Get profile by user ID
 router.get("/:userId", protect, getProfile);
 
-// Create profile
+// =====================================================
+// CREATE PROFILE
+// =====================================================
+
 router.post("/", protect, upload.single("profileImage"), createProfile);
 
-// Update profile
+// =====================================================
+// UPDATE PROFILE
+// =====================================================
+
 router.put("/:userId", protect, upload.single("profileImage"), updateProfile);
 
-// Delete profile
+// =====================================================
+// CHANGE PASSWORD
+// =====================================================
+
+router.put("/:userId/change-password", protect, changePassword);
+
+// =====================================================
+// DELETE ACCOUNT
+// =====================================================
+
 router.delete("/:userId", protect, deleteProfile);
 
 module.exports = router;

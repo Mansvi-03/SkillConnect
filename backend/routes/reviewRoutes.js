@@ -3,29 +3,53 @@ const express = require("express");
 const {
   createReview,
   getReviews,
+  getReviewsByService,
   getReviewById,
   updateReview,
   deleteReview,
 } = require("../controllers/reviewController");
 
 const { protect } = require("../middleware/authMiddleware");
+
 const { authorize } = require("../middleware/roleMiddleware");
 
 const router = express.Router();
 
-// Get all reviews
+// =====================================================
+// GET ALL REVIEWS
+// =====================================================
+
 router.get("/", getReviews);
 
-// Get single review
+// =====================================================
+// GET REVIEWS FOR A SERVICE
+// IMPORTANT: This must come before /:id
+// =====================================================
+
+router.get("/service/:serviceId", getReviewsByService);
+
+// =====================================================
+// GET SINGLE REVIEW
+// =====================================================
+
 router.get("/:id", getReviewById);
 
-// Create review - Customer only
+// =====================================================
+// CREATE REVIEW
+// =====================================================
+
 router.post("/", protect, authorize("customer"), createReview);
 
-// Update review - Customer only
+// =====================================================
+// UPDATE REVIEW
+// =====================================================
+
 router.put("/:id", protect, authorize("customer"), updateReview);
 
-// Delete review - Customer only
+// =====================================================
+// DELETE REVIEW
+// =====================================================
+
 router.delete("/:id", protect, authorize("customer"), deleteReview);
 
 module.exports = router;

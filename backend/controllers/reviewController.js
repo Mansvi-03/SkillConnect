@@ -3,10 +3,17 @@ const Booking = require("../models/Booking");
 const Customer = require("../models/Customer");
 const Service = require("../models/Service");
 
+// =====================================================
 // CREATE REVIEW
+// =====================================================
+
 const createReview = async (req, res) => {
   try {
     const { booking, rating, reviewText } = req.body;
+
+    // -----------------------------------------------
+    // VALIDATION
+    // -----------------------------------------------
 
     if (!booking || rating === undefined) {
       return res.status(400).json({
@@ -22,6 +29,17 @@ const createReview = async (req, res) => {
       });
     }
 
+    if (!reviewText || !reviewText.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Review text is required",
+      });
+    }
+
+    // -----------------------------------------------
+    // FIND CUSTOMER
+    // -----------------------------------------------
+
     const customer = await Customer.findOne({
       user: req.user._id,
     });
@@ -33,7 +51,13 @@ const createReview = async (req, res) => {
       });
     }
 
-    const bookingData = await Booking.findById(booking);
+    // -----------------------------------------------
+    // FIND BOOKING
+    // -----------------------------------------------
+
+    const bookingData = await Booking.findById(booking)
+      .populate("service")
+      .populate("provider");
 
     if (!bookingData) {
       return res.status(404).json({
@@ -42,6 +66,10 @@ const createReview = async (req, res) => {
       });
     }
 
+    // -----------------------------------------------
+    // OWNERSHIP
+    // -----------------------------------------------
+
     if (bookingData.customer.toString() !== customer._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -49,12 +77,20 @@ const createReview = async (req, res) => {
       });
     }
 
+    // -----------------------------------------------
+    // COMPLETED CHECK
+    // -----------------------------------------------
+
     if (bookingData.status !== "Completed") {
       return res.status(400).json({
         success: false,
         message: "You can review only completed bookings",
       });
     }
+
+    // -----------------------------------------------
+    // DUPLICATE REVIEW CHECK
+    // -----------------------------------------------
 
     const existingReview = await Review.findOne({
       booking: bookingData._id,
@@ -67,25 +103,39 @@ const createReview = async (req, res) => {
       });
     }
 
+    // -----------------------------------------------
+    // CREATE REVIEW
+    // -----------------------------------------------
+
     const review = await Review.create({
       customer: customer._id,
       provider: bookingData.provider,
       service: bookingData.service,
       booking: bookingData._id,
-      rating,
-      reviewText,
+      rating: Number(rating),
+      reviewText: reviewText.trim(),
     });
 
-    // Update service rating
+    // -----------------------------------------------
+    // RECALCULATE SERVICE RATING
+    // -----------------------------------------------
+
+    const serviceReviews = await Review.find({
+      service: bookingData.service,
+    });
+
+    const totalRating = serviceReviews.reduce(
+      (sum, item) => sum + Number(item.rating),
+      0,
+    );
+
     const service = await Service.findById(bookingData.service);
 
     if (service) {
-      const totalRating = service.averageRating * service.totalReviews;
-
-      service.totalReviews += 1;
+      service.totalReviews = serviceReviews.length;
 
       service.averageRating =
-        (totalRating + Number(rating)) / service.totalReviews;
+        serviceReviews.length > 0 ? totalRating / serviceReviews.length : 0;
 
       service.averageRating = Math.round(service.averageRating * 10) / 10;
 
@@ -98,6 +148,8 @@ const createReview = async (req, res) => {
       review,
     });
   } catch (error) {
+    console.error("CREATE REVIEW ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -105,14 +157,31 @@ const createReview = async (req, res) => {
   }
 };
 
+// =====================================================
 // GET ALL REVIEWS
+// =====================================================
+
 const getReviews = async (req, res) => {
   try {
     const reviews = await Review.find()
-      .populate("customer")
-      .populate("provider")
-      .populate("service")
-      .sort({ _id: -1 });
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email",
+        },
+      })
+      .populate("service", "name price location")
+      .sort({
+        createdAt: -1,
+      });
 
     res.status(200).json({
       success: true,
@@ -127,13 +196,73 @@ const getReviews = async (req, res) => {
   }
 };
 
+// =====================================================
+// GET REVIEWS BY SERVICE
+// =====================================================
+
+const getReviewsByService = async (req, res) => {
+  try {
+    const { serviceId } = req.params;
+
+    const reviews = await Review.find({
+      service: serviceId,
+    })
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email",
+        },
+      })
+      .populate("service", "name price location")
+      .sort({
+        createdAt: -1,
+      });
+
+    res.status(200).json({
+      success: true,
+      count: reviews.length,
+      reviews,
+    });
+  } catch (error) {
+    console.error("GET SERVICE REVIEWS ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// =====================================================
 // GET SINGLE REVIEW
+// =====================================================
+
 const getReviewById = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id)
-      .populate("customer")
-      .populate("provider")
-      .populate("service");
+      .populate({
+        path: "customer",
+        populate: {
+          path: "user",
+          select: "name email",
+        },
+      })
+      .populate({
+        path: "provider",
+        populate: {
+          path: "user",
+          select: "name email",
+        },
+      })
+      .populate("service", "name price location");
 
     if (!review) {
       return res.status(404).json({
@@ -154,7 +283,10 @@ const getReviewById = async (req, res) => {
   }
 };
 
+// =====================================================
 // UPDATE REVIEW
+// =====================================================
+
 const updateReview = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
@@ -177,7 +309,9 @@ const updateReview = async (req, res) => {
       });
     }
 
-    const oldRating = review.rating;
+    // -----------------------------------------------
+    // UPDATE RATING
+    // -----------------------------------------------
 
     if (req.body.rating !== undefined) {
       if (req.body.rating < 1 || req.body.rating > 5) {
@@ -187,35 +321,43 @@ const updateReview = async (req, res) => {
         });
       }
 
-      review.rating = req.body.rating;
+      review.rating = Number(req.body.rating);
     }
 
+    // -----------------------------------------------
+    // UPDATE REVIEW TEXT
+    // -----------------------------------------------
+
     if (req.body.reviewText !== undefined) {
-      review.reviewText = req.body.reviewText;
+      review.reviewText = req.body.reviewText.trim();
     }
 
     await review.save();
 
-    // Recalculate service rating
-    if (oldRating !== review.rating) {
-      const reviews = await Review.find({
-        service: review.service,
-      });
+    // -----------------------------------------------
+    // RECALCULATE RATING
+    // -----------------------------------------------
 
-      const totalRating = reviews.reduce((sum, item) => sum + item.rating, 0);
+    const reviews = await Review.find({
+      service: review.service,
+    });
 
-      const service = await Service.findById(review.service);
+    const totalRating = reviews.reduce(
+      (sum, item) => sum + Number(item.rating),
+      0,
+    );
 
-      if (service) {
-        service.totalReviews = reviews.length;
+    const service = await Service.findById(review.service);
 
-        service.averageRating =
-          reviews.length > 0 ? totalRating / reviews.length : 0;
+    if (service) {
+      service.totalReviews = reviews.length;
 
-        service.averageRating = Math.round(service.averageRating * 10) / 10;
+      service.averageRating =
+        reviews.length > 0 ? totalRating / reviews.length : 0;
 
-        await service.save();
-      }
+      service.averageRating = Math.round(service.averageRating * 10) / 10;
+
+      await service.save();
     }
 
     res.status(200).json({
@@ -231,7 +373,10 @@ const updateReview = async (req, res) => {
   }
 };
 
+// =====================================================
 // DELETE REVIEW
+// =====================================================
+
 const deleteReview = async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
@@ -258,12 +403,18 @@ const deleteReview = async (req, res) => {
 
     await review.deleteOne();
 
-    // Recalculate service rating
+    // -----------------------------------------------
+    // RECALCULATE SERVICE RATING
+    // -----------------------------------------------
+
     const reviews = await Review.find({
       service: serviceId,
     });
 
-    const totalRating = reviews.reduce((sum, item) => sum + item.rating, 0);
+    const totalRating = reviews.reduce(
+      (sum, item) => sum + Number(item.rating),
+      0,
+    );
 
     const service = await Service.findById(serviceId);
 
@@ -290,9 +441,14 @@ const deleteReview = async (req, res) => {
   }
 };
 
+// =====================================================
+// EXPORT
+// =====================================================
+
 module.exports = {
   createReview,
   getReviews,
+  getReviewsByService,
   getReviewById,
   updateReview,
   deleteReview,

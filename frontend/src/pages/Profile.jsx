@@ -1,22 +1,33 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
-import Loading from "../components/Loading";
+
 import {
   User,
+  Mail,
   Phone,
   MapPin,
-  FileText,
-  Upload,
+  Lock,
+  Eye,
+  EyeOff,
   Save,
-  CheckCircle2,
-  AlertCircle,
+  Trash2,
+  AlertTriangle,
   ShieldCheck,
-  Sparkles,
+  CheckCircle2,
+  X,
 } from "lucide-react";
 
 const Profile = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+
+  const navigate = useNavigate();
+
+  // =====================================================
+  // PROFILE STATE
+  // =====================================================
 
   const [formData, setFormData] = useState({
     name: "",
@@ -27,15 +38,54 @@ const Profile = () => {
   });
 
   const [profileImage, setProfileImage] = useState(null);
-  const [previewImage, setPreviewImage] = useState(null);
+
+  // =====================================================
+  // PAGE STATE
+  // =====================================================
 
   const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState("");
+
   const [message, setMessage] = useState("");
 
+  // =====================================================
+  // PASSWORD STATE
+  // =====================================================
+
+  const [currentPassword, setCurrentPassword] = useState("");
+
+  const [newPassword, setNewPassword] = useState("");
+
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const [passwordMessage, setPasswordMessage] = useState("");
+
+  const [passwordError, setPasswordError] = useState("");
+
+  // =====================================================
+  // DELETE STATE
+  // =====================================================
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  const [deleting, setDeleting] = useState(false);
+
   const userId = user?._id || user?.id;
+
+  // =====================================================
+  // FETCH PROFILE
+  // =====================================================
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -44,11 +94,13 @@ const Profile = () => {
         setError("");
 
         if (!userId) {
-          throw new Error("User ID not found. Please log in again.");
+          throw new Error("User ID not found. Please login again.");
         }
 
         const response = await api.get(`/profiles/${userId}`);
+
         const userData = response.data.user;
+
         const profileData = response.data.profile;
 
         setFormData({
@@ -60,8 +112,11 @@ const Profile = () => {
         });
       } catch (err) {
         console.error("PROFILE FETCH ERROR:", err);
+
         setError(
-          err.response?.data?.message || err.message || "Unable to load profile.",
+          err.response?.data?.message ||
+            err.message ||
+            "Unable to load profile.",
         );
       } finally {
         setLoading(false);
@@ -70,25 +125,37 @@ const Profile = () => {
 
     if (userId) {
       fetchProfile();
-    } else if (user !== undefined) {
+    } else {
       setLoading(false);
     }
-  }, [userId, user]);
+  }, [userId]);
+
+  // =====================================================
+  // INPUT CHANGE
+  // =====================================================
 
   const handleChange = (e) => {
-    setFormData((prev) => ({
-      ...prev,
+    setFormData((previous) => ({
+      ...previous,
       [e.target.name]: e.target.value,
     }));
   };
 
+  // =====================================================
+  // IMAGE CHANGE
+  // =====================================================
+
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
+
     if (file) {
       setProfileImage(file);
-      setPreviewImage(URL.createObjectURL(file));
     }
   };
+
+  // =====================================================
+  // UPDATE PROFILE
+  // =====================================================
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -98,14 +165,14 @@ const Profile = () => {
       setError("");
       setMessage("");
 
-      if (!userId) {
-        throw new Error("User ID not found.");
-      }
-
       const data = new FormData();
+
       data.append("name", formData.name);
+
       data.append("phone", formData.phone);
+
       data.append("address", formData.address);
+
       data.append("city", formData.city);
 
       if (user?.role === "provider") {
@@ -125,209 +192,612 @@ const Profile = () => {
       };
 
       updateUser(response.data.user || updatedUser);
-      setMessage("Your profile has been updated successfully.");
+
+      setMessage("Profile updated successfully.");
+
       setProfileImage(null);
     } catch (err) {
       console.error("PROFILE UPDATE ERROR:", err);
+
       setError(
-        err.response?.data?.message || err.message || "Unable to update profile.",
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to update profile.",
       );
     } finally {
       setSaving(false);
     }
   };
 
+  // =====================================================
+  // CHANGE PASSWORD
+  // =====================================================
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+
+    setPasswordMessage("");
+    setPasswordError("");
+
+    if (newPassword.length < 6) {
+      setPasswordError("New password must contain at least 6 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirm password do not match.");
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+
+      await api.put(`/profiles/${userId}/change-password`, {
+        currentPassword,
+        newPassword,
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      setPasswordMessage("Password changed successfully.");
+    } catch (err) {
+      console.error("CHANGE PASSWORD ERROR:", err);
+
+      setPasswordError(
+        err.response?.data?.message || "Unable to change password.",
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // =====================================================
+  // DELETE ACCOUNT
+  // =====================================================
+
+  const handleDeleteAccount = async () => {
+    try {
+      setDeleting(true);
+      setError("");
+
+      const response = await api.delete(`/profiles/${userId}`);
+
+      // Clear authentication
+      await logout();
+
+      // Redirect
+      navigate("/login", {
+        replace: true,
+        state: {
+          accountDeleted:
+            response.data.message ||
+            "Your account has been deleted successfully.",
+        },
+      });
+    } catch (err) {
+      console.error("DELETE ACCOUNT ERROR:", err);
+
+      setShowDeleteModal(false);
+
+      setError(err.response?.data?.message || "Unable to delete your account.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // =====================================================
+  // LOADING
+  // =====================================================
+
   if (loading) {
-    return <Loading message="Loading profile information..." />;
+    return (
+      <div className="profile-loading">
+        <div className="profile-loading-card">
+          <div className="profile-loading-spinner" />
+
+          <h2>Loading Your Profile</h2>
+
+          <p>Please wait while we load your SkillConnect profile.</p>
+        </div>
+      </div>
+    );
   }
 
-  const role = user?.role || "Member";
+  // =====================================================
+  // LOGIN REQUIRED
+  // =====================================================
+
+  if (!user || !userId) {
+    return (
+      <div className="profile-error-page">
+        <div className="profile-error-card">
+          <div className="profile-error-icon">🔐</div>
+
+          <h2>Login Required</h2>
+
+          <p>Please login again to access your profile.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // PROFILE ERROR
+  // =====================================================
+
+  if (error) {
+    return (
+      <div className="profile-error-page">
+        <div className="profile-error-card">
+          <div className="profile-error-icon">⚠️</div>
+
+          <h2>Profile Error</h2>
+
+          <p>{error}</p>
+
+          <button
+            type="button"
+            className="profile-retry-button"
+            onClick={() => window.location.reload()}
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // =====================================================
+  // PROFILE PAGE
+  // =====================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-16">
-      {/* Header Banner */}
-      <section className="bg-slate-900 text-white py-10 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="max-w-4xl mx-auto relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
-              {formData.name?.charAt(0)?.toUpperCase() || user?.name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-extrabold tracking-tight">
-                  {formData.name || user?.name || "Account Profile"}
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/20">
-                  {role}
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                {user?.email}
-              </p>
-            </div>
-          </div>
+    <div className="profile-page">
+      <div className="sc-container">
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
+        <div className="profile-header">
+          <div className="profile-eyebrow">Account</div>
+
+          <h1 className="profile-title">My Profile</h1>
+
+          <p className="profile-subtitle">
+            Manage your personal information and SkillConnect account.
+          </p>
         </div>
-      </section>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* =================================================
+            SUCCESS
+        ================================================= */}
+
         {message && (
-          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600" />
-            <p>{message}</p>
+          <div className="profile-success">
+            <CheckCircle2 size={18} />
+            {message}
           </div>
         )}
 
-        {error && (
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 shrink-0 text-rose-500" />
-            <p>{error}</p>
-          </div>
-        )}
+        {/* =================================================
+            PROFILE LAYOUT
+        ================================================= */}
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-10 shadow-sm space-y-6">
-          <div className="pb-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Personal Information</h2>
-            <p className="text-xs text-slate-500">Update your contact information and display details</p>
-          </div>
+        <div className="profile-layout">
+          {/* =================================================
+              LEFT CARD
+          ================================================= */}
 
-          {/* Name & Phone */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Your full name"
-                  required
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-                />
+          <div className="profile-card">
+            <div className="profile-card-top">
+              <div className="profile-avatar">
+                {formData.name ? formData.name.charAt(0).toUpperCase() : "U"}
               </div>
+
+              <h2 className="profile-name">{formData.name || "User"}</h2>
+
+              <p className="profile-email">{user.email}</p>
+
+              <span className="profile-role">
+                {user.role === "provider" ? "Service Provider" : "Customer"}
+              </span>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Phone Number
-              </label>
-              <div className="relative">
-                <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="10-digit mobile number"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-                />
+            <div className="profile-info">
+              <div className="profile-info-item">
+                <div className="profile-info-label">Phone</div>
+
+                <div className="profile-info-value">
+                  {formData.phone || "Not available"}
+                </div>
+              </div>
+
+              <div className="profile-info-item">
+                <div className="profile-info-label">City</div>
+
+                <div className="profile-info-value">
+                  {formData.city || "Not available"}
+                </div>
+              </div>
+
+              <div className="profile-info-item">
+                <div className="profile-info-label">Address</div>
+
+                <div className="profile-info-value">
+                  {formData.address || "Not available"}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* City & Address */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                City / Region
-              </label>
-              <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+          {/* =================================================
+              RIGHT FORM
+          ================================================= */}
+
+          <div className="profile-form-card">
+            <div className="profile-form-header">
+              <h2>Personal Information</h2>
+
+              <p>Update your information below.</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="profile-form">
+              {/* NAME */}
+
+              <div className="profile-field full">
+                <label>Full Name</label>
+
+                <div className="profile-input-icon">
+                  <User size={17} />
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* EMAIL */}
+
+              <div className="profile-field">
+                <label>Email Address</label>
+
+                <div className="profile-input-icon disabled">
+                  <Mail size={17} />
+
+                  <input type="email" value={user.email || ""} disabled />
+                </div>
+              </div>
+
+              {/* PHONE */}
+
+              <div className="profile-field">
+                <label>Phone Number</label>
+
+                <div className="profile-input-icon">
+                  <Phone size={17} />
+
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* ADDRESS */}
+
+              <div className="profile-field">
+                <label>Address</label>
+
+                <div className="profile-input-icon">
+                  <MapPin size={17} />
+
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+
+              {/* CITY */}
+
+              <div className="profile-field">
+                <label>City</label>
+
                 <input
                   type="text"
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  placeholder="e.g. Ahmedabad, Gujarat"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Street Address
-              </label>
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="Apartment, building, street..."
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-              />
-            </div>
-          </div>
+              {/* PROVIDER BIO */}
 
-          {/* Provider Bio if Role is Provider */}
-          {user?.role === "provider" && (
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                Professional Bio / Experience
-              </label>
-              <textarea
-                rows={4}
-                name="bio"
-                value={formData.bio}
-                onChange={handleChange}
-                placeholder="Share your years of experience, certifications, and service philosophy with customers..."
-                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none leading-relaxed"
-              />
-            </div>
-          )}
+              {user.role === "provider" && (
+                <div className="profile-field full">
+                  <label>Professional Bio</label>
 
-          {/* Avatar Picture Upload */}
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-              Profile Photo
-            </label>
-            <div className="flex items-center gap-4 p-4 rounded-2xl border border-slate-200 bg-slate-50">
-              {previewImage ? (
-                <img
-                  src={previewImage}
-                  alt="Avatar Preview"
-                  className="w-14 h-14 rounded-2xl object-cover border"
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400">
-                  <User className="w-7 h-7" />
+                  <textarea
+                    name="bio"
+                    value={formData.bio}
+                    onChange={handleChange}
+                    placeholder="Tell customers about your skills and experience..."
+                  />
                 </div>
               )}
-              <div className="flex-grow">
+
+              {/* PROFILE IMAGE */}
+
+              <div className="profile-field full">
+                <label>Profile Image</label>
+
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="profile-file"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Recommended: Square format PNG, JPG up to 2MB</p>
+
+                {profileImage && (
+                  <p className="profile-file-name">
+                    Selected: {profileImage.name}
+                  </p>
+                )}
               </div>
+
+              {/* SAVE */}
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="profile-save-button"
+              >
+                <Save size={17} />
+
+                {saving ? "Saving Changes..." : "Save Changes"}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* =================================================
+            CHANGE PASSWORD
+        ================================================= */}
+
+        <section className="profile-security-card">
+          <div className="profile-security-header">
+            <div className="profile-security-icon">
+              <Lock size={21} />
+            </div>
+
+            <div>
+              <h2>Change Password</h2>
+
+              <p>Update your password to keep your account secure.</p>
             </div>
           </div>
 
-          {/* Save Button */}
-          <div className="pt-4 border-t border-slate-100 flex justify-end">
+          {passwordMessage && (
+            <div className="profile-password-success">
+              <CheckCircle2 size={17} />
+              {passwordMessage}
+            </div>
+          )}
+
+          {passwordError && (
+            <div className="profile-password-error">
+              <AlertTriangle size={17} />
+              {passwordError}
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword} className="password-form">
+            {/* CURRENT PASSWORD */}
+
+            <div className="password-field">
+              <label>Current Password</label>
+
+              <div className="password-input-wrapper">
+                <Lock size={17} />
+
+                <input
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((value) => !value)}
+                  className="password-eye-button"
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff size={17} />
+                  ) : (
+                    <Eye size={17} />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* NEW PASSWORD */}
+
+            <div className="password-field">
+              <label>New Password</label>
+
+              <div className="password-input-wrapper">
+                <Lock size={17} />
+
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword((value) => !value)}
+                  className="password-eye-button"
+                >
+                  {showNewPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </div>
+
+            {/* CONFIRM PASSWORD */}
+
+            <div className="password-field">
+              <label>Confirm New Password</label>
+
+              <div className="password-input-wrapper">
+                <Lock size={17} />
+
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((value) => !value)}
+                  className="password-eye-button"
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={17} />
+                  ) : (
+                    <Eye size={17} />
+                  )}
+                </button>
+              </div>
+            </div>
+
             <button
               type="submit"
-              disabled={saving}
-              className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-blue-500/20 hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50"
+              disabled={changingPassword}
+              className="change-password-button"
             >
-              {saving ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Save Profile Changes</span>
-                </>
-              )}
+              <ShieldCheck size={17} />
+
+              {changingPassword ? "Changing Password..." : "Change Password"}
             </button>
+          </form>
+        </section>
+
+        {/* =================================================
+            DANGER ZONE
+        ================================================= */}
+
+        {(user.role === "customer" || user.role === "provider") && (
+          <section className="profile-danger-card">
+            <div className="profile-danger-content">
+              <div className="profile-danger-icon">
+                <Trash2 size={21} />
+              </div>
+
+              <div>
+                <h2>Delete Account</h2>
+
+                <p>
+                  Permanently delete your SkillConnect account. Completed
+                  bookings, payments and history will remain available as
+                  historical records.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="delete-account-button"
+              onClick={() => setShowDeleteModal(true)}
+            >
+              <Trash2 size={17} />
+              Delete My Account
+            </button>
+          </section>
+        )}
+      </div>
+
+      {/* =================================================
+          DELETE CONFIRMATION MODAL
+      ================================================= */}
+
+      {showDeleteModal && (
+        <div className="delete-modal-overlay">
+          <div className="delete-modal">
+            <button
+              type="button"
+              className="delete-modal-close"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={deleting}
+            >
+              <X size={19} />
+            </button>
+
+            <div className="delete-modal-icon">
+              <AlertTriangle size={25} />
+            </div>
+
+            <h2>Delete Your Account?</h2>
+
+            <p>
+              This action cannot be undone. Your account and profile will be
+              permanently removed.
+            </p>
+
+            <div className="delete-modal-warning">
+              <strong>Before deletion:</strong>
+
+              <ul>
+                <li>Pending bookings will be cancelled.</li>
+
+                <li>
+                  Accepted/in-progress bookings will block deletion until the
+                  work is completed.
+                </li>
+
+                <li>Completed bookings and payment history will remain.</li>
+              </ul>
+            </div>
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-cancel-button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+              >
+                Keep My Account
+              </button>
+
+              <button
+                type="button"
+                className="delete-confirm-button"
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Yes, Delete Account"}
+              </button>
+            </div>
           </div>
-        </form>
-      </main>
+        </div>
+      )}
     </div>
   );
 };
