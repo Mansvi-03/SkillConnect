@@ -9,53 +9,55 @@ dotenv.config();
 
 const createAdmin = async () => {
   try {
-    // Connect to MongoDB Atlas
     await mongoose.connect(process.env.MONGO_URI);
-
     console.log("MongoDB connected");
 
     const email = "admin@skillconnect.com";
     const password = "Admin@123";
     const name = "SkillConnect Admin";
-    const phone = "9999999999"; // Required by User model
+    const phone = "9999999999";
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-
-    if (existingUser) {
-      console.log("Admin user already exists.");
-      process.exit(0);
-    }
-
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create admin user
-    const user = await User.create({
-      name,
-      email,
-      phone,
-      password: hashedPassword,
-      role: "admin",
-    });
+    let user = await User.findOne({ email });
 
-    // Create Admin profile
-    await Admin.create({
-      user: user._id,
-    });
+    if (user) {
+      // Update the existing admin account
+      user.name = name;
+      user.phone = phone;
+      user.password = hashedPassword;
+      user.role = "admin";
 
-    console.log("-----------------------------------");
-    console.log("Admin created successfully!");
+      await user.save();
+
+      console.log("Existing admin account updated.");
+    } else {
+      // Create a new admin account
+      user = await User.create({
+        name,
+        email,
+        phone,
+        password: hashedPassword,
+        role: "admin",
+      });
+
+      console.log("New admin account created.");
+    }
+
+    // Ensure the Admin profile exists
+    await Admin.findOneAndUpdate(
+      { user: user._id },
+      { $setOnInsert: { user: user._id } },
+      { upsert: true, new: true },
+    );
+
+    console.log("Admin setup completed.");
     console.log("Email:", email);
     console.log("Password:", password);
-    console.log("Phone:", phone);
-    console.log("Role: admin");
-    console.log("-----------------------------------");
-
-    process.exit(0);
   } catch (error) {
-    console.error("Admin creation failed:", error.message);
-    process.exit(1);
+    console.error("Admin setup failed:", error.message);
+  } finally {
+    await mongoose.disconnect();
   }
 };
 
